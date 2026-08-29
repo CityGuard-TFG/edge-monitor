@@ -41,8 +41,8 @@ export default function App() {
     statusData?.throttled?.under_voltage || statusData?.throttled?.throttled;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+    <div className="flex w-full flex-col gap-3 p-4 lg:h-dvh lg:overflow-hidden lg:p-5">
+      <header className="flex flex-none flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight text-[color:var(--ink)]">
             CityGuard Edge Monitor
@@ -59,56 +59,58 @@ export default function App() {
       </header>
 
       {throttleWarning && (
-        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[0.75rem] font-semibold text-red-700">
+        <div className="flex-none rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-[0.75rem] font-semibold text-red-700">
           {statusData.throttled.under_voltage && 'Under-voltage detected. '}
           {statusData.throttled.throttled && 'Pi is throttling.'}
         </div>
       )}
 
-      <section className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <MetricCard label="CPU" value={fmtPercent(statusData?.cpu_percent)} accent="gold" />
-        <MetricCard
-          label="RAM"
-          value={fmtPercent(statusData?.ram?.percent)}
-          caption={
-            statusData?.ram
-              ? `${Math.round(statusData.ram.used_mb)} / ${Math.round(statusData.ram.total_mb)} MB`
-              : undefined
-          }
-          accent="red"
-        />
-        <MetricCard
-          label="Disk"
-          value={fmtPercent(statusData?.disk?.percent)}
-          caption={
-            statusData?.disk
-              ? `${statusData.disk.used_gb} / ${statusData.disk.total_gb} GB`
-              : undefined
-          }
-          accent="gray"
-        />
-        <MetricCard
-          label="CPU Temp"
-          value={statusData?.cpu_temp_c !== null && statusData?.cpu_temp_c !== undefined ? `${statusData.cpu_temp_c}°C` : '—'}
-          accent={tempAccent(statusData?.cpu_temp_c)}
-        />
-        <MetricCard
-          label="Power"
-          value={statusData?.power_w !== null && statusData?.power_w !== undefined ? `${statusData.power_w} W` : '—'}
-          caption="internal rails"
-          accent="gold"
-        />
-        <MetricCard label="Uptime" value={fmtUptime(statusData?.uptime_seconds)} accent="gray" />
-      </section>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[15rem_1fr_20rem]">
+        <section className="grid grid-cols-2 content-start gap-2 lg:overflow-y-auto">
+          <MetricCard label="CPU" value={fmtPercent(statusData?.cpu_percent)} accent="gold" />
+          <MetricCard
+            label="RAM"
+            value={fmtPercent(statusData?.ram?.percent)}
+            caption={
+              statusData?.ram
+                ? `${Math.round(statusData.ram.used_mb)} / ${Math.round(statusData.ram.total_mb)} MB`
+                : undefined
+            }
+            accent="red"
+          />
+          <MetricCard
+            label="Disk"
+            value={fmtPercent(statusData?.disk?.percent)}
+            caption={
+              statusData?.disk
+                ? `${statusData.disk.used_gb} / ${statusData.disk.total_gb} GB`
+                : undefined
+            }
+            accent="gray"
+          />
+          <MetricCard
+            label="CPU Temp"
+            value={statusData?.cpu_temp_c !== null && statusData?.cpu_temp_c !== undefined ? `${statusData.cpu_temp_c}°C` : '—'}
+            accent={tempAccent(statusData?.cpu_temp_c)}
+          />
+          <MetricCard
+            label="Power"
+            value={statusData?.power_w !== null && statusData?.power_w !== undefined ? `${statusData.power_w} W` : '—'}
+            caption="internal rails"
+            accent="gold"
+          />
+          <MetricCard label="Uptime" value={fmtUptime(statusData?.uptime_seconds)} accent="gray" />
+        </section>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <HailoCard hailo={hailo} />
-        <GpsCard gps={gps} />
-      </section>
+        <section className="min-h-[240px] lg:min-h-0">
+          <CameraPanel />
+        </section>
 
-      <section className="mt-3">
-        <CameraPanel />
-      </section>
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:overflow-y-auto">
+          <HailoCard hailo={hailo} />
+          <GpsCard gps={gps} />
+        </section>
+      </div>
     </div>
   );
 }

@@ -23,8 +23,8 @@ export default function CameraPanel() {
   const age = status ? relativeAge(status.last_capture_at) : null;
 
   return (
-    <div className="card p-4">
-      <div className="mb-3 flex items-center justify-between">
+    <div className="card flex h-full flex-col p-4">
+      <div className="mb-3 flex flex-none items-center justify-between">
         <h2 className="text-sm font-bold tracking-tight">Camera preview</h2>
         {status && age !== null && age > 4 && !unavailable && (
           <small className="text-[0.65rem] text-[color:var(--muted)]">
@@ -32,7 +32,7 @@ export default function CameraPanel() {
           </small>
         )}
       </div>
-      <div className="relative aspect-video w-full max-w-xs overflow-hidden rounded-lg bg-black sm:max-w-sm">
+      <div className="relative h-full min-h-[200px] w-full flex-1 overflow-hidden rounded-lg bg-black">
         {unavailable || imgError ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[0.75rem] text-gray-300">
             <span>Camera unavailable</span>
