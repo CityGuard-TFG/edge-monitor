@@ -4,6 +4,7 @@ Deliberately serves raw, unblurred JPEG frames -- this is a bring-up/alignment
 tool, not the anonymization pipeline. See ../../README.md for the operational
 caveat before running this near the public.
 """
+import os
 import subprocess
 import threading
 import time
@@ -15,6 +16,7 @@ router = APIRouter()
 
 _MIN_CAPTURE_INTERVAL_SECONDS = 2.0
 _CAPTURE_TIMEOUT_SECONDS = 5
+_CAMERA_ROTATION = os.getenv("CITYGUARD_CAMERA_ROTATION", "180")
 
 _lock = threading.Lock()
 _state = {
@@ -25,23 +27,26 @@ _state = {
 
 
 def _capture_now():
+    cmd = [
+        "rpicam-still",
+        "--immediate",
+        "--nopreview",
+        "--timeout",
+        "1",
+        "--width",
+        "1280",
+        "--height",
+        "720",
+        "--encoding",
+        "jpg",
+    ]
+    if _CAMERA_ROTATION in ("0", "180"):
+        cmd.extend(["--rotation", _CAMERA_ROTATION])
+    cmd.extend(["-o", "-"])
+
     try:
         proc = subprocess.run(
-            [
-                "rpicam-still",
-                "--immediate",
-                "--nopreview",
-                "--timeout",
-                "1",
-                "--width",
-                "1280",
-                "--height",
-                "720",
-                "--encoding",
-                "jpg",
-                "-o",
-                "-",
-            ],
+            cmd,
             capture_output=True,
             timeout=_CAPTURE_TIMEOUT_SECONDS,
         )
