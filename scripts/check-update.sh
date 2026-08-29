@@ -44,7 +44,12 @@ if ! git -C "${APP_DIR}" fetch --tags --quiet; then
   exit 0
 fi
 
-if ! git -C "${APP_DIR}" checkout --quiet "${latest_tag}"; then
+
+# --force: this checkout is a deploy target, never a place for local edits --
+# any stray local diff (e.g. an install.sh chmod that didn't match the
+# tracked mode) should be discarded, not allowed to block every future
+# update forever.
+if ! git -C "${APP_DIR}" checkout --quiet --force "${latest_tag}"; then
   log "git checkout ${latest_tag} failed -- starting with the currently deployed code."
   exit 0
 fi
