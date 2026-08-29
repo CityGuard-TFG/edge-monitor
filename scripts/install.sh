@@ -20,9 +20,11 @@ id -u "${SERVICE_USER}" >/dev/null 2>&1 || {
 }
 
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-venv python3-pip nodejs npm
+apt-get install -y --no-install-recommends python3 python3-venv python3-pip python3-gps nodejs npm
 
-python3 -m venv "${APP_DIR}/venv"
+# --system-site-packages: /api/gps depends on `import gps`, provided by the
+# apt package python3-gps, not a PyPI package -- an isolated venv can't see it.
+python3 -m venv --system-site-packages "${APP_DIR}/venv"
 "${APP_DIR}/venv/bin/pip" install --upgrade pip
 "${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/server/requirements.txt"
 

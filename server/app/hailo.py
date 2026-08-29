@@ -44,14 +44,17 @@ def _identify():
         result["error"] = (proc.stderr or proc.stdout or "hailortcli failed").strip()
         return result
 
+    def _clean(value):
+        return value.strip().strip("\x00").strip()
+
     for line in proc.stdout.splitlines():
-        line = line.strip()
+        line = _clean(line)
         if line.startswith("Board Name:"):
-            result["board_name"] = line.split(":", 1)[1].strip()
+            result["board_name"] = _clean(line.split(":", 1)[1])
         elif line.startswith("Device Architecture:"):
-            result["architecture"] = line.split(":", 1)[1].strip()
+            result["architecture"] = _clean(line.split(":", 1)[1])
         elif line.startswith("Firmware Version:"):
-            result["firmware_version"] = line.split(":", 1)[1].strip()
+            result["firmware_version"] = _clean(line.split(":", 1)[1])
 
     result["detected"] = result["board_name"] is not None
     if not result["detected"] and result["error"] is None:
