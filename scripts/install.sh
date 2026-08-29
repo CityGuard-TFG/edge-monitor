@@ -36,7 +36,10 @@ fi
 
 install -m 0644 "${APP_DIR}/systemd/cityguard-edge-monitor.service" /etc/systemd/system/cityguard-edge-monitor.service
 systemctl daemon-reload
-systemctl enable --now cityguard-edge-monitor.service
+systemctl enable cityguard-edge-monitor.service
+# `enable --now` is a no-op restart-wise if the service is already running,
+# which would leave a re-run after `git pull` silently serving stale code.
+systemctl restart cityguard-edge-monitor.service
 
 ip_addr="$(hostname -I | awk '{print $1}')"
 echo "CityGuard Edge Monitor installed and running."
