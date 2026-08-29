@@ -26,10 +26,14 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-# ProtectHome=true would otherwise blank cityguard's own home out too --
-# git/pip/npm all want to write cache/config under $HOME during the
-# ExecStartPre update check, so carve that one exception back in.
-ProtectHome=true
+# ProtectHome=true makes /home fully INACCESSIBLE (mode 000), not merely an
+# empty tmpfs -- ReadWritePaths can't punch a hole through a parent that
+# can't even be traversed. ProtectHome=read-only keeps /home listable (and
+# every other user's home read-only) while letting ReadWritePaths carve out
+# a real read-write exception for cityguard's own home, which git/pip/npm
+# all need to write cache/config into during the ExecStartPre update check.
+# Verified against the real sandbox with systemd-run before relying on it.
+ProtectHome=read-only
 ReadWritePaths=/opt/cityguard-edge-monitor /home/cityguard
 
 [Install]
