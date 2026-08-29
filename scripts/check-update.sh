@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# Runs as ExecStartPre before the dashboard starts. Deliberately never fails
-# the unit: any problem here (offline, rate-limited, no git checkout) just
-# means the service starts with whatever code is already on disk.
+# Runs as ExecStartPre before the dashboard starts, as the unprivileged
+# `cityguard` user. Deliberately never fails the unit: any problem here
+# (offline, rate-limited, no git checkout) just means the service starts
+# with whatever code is already on disk.
+#
+# Scope boundary: this updates the application code (server/, web/) but
+# cannot touch /etc/systemd/system or run `systemctl daemon-reload` --
+# both need root, which this unprivileged service intentionally doesn't
+# have. A release that changes systemd/cityguard-edge-monitor.service or
+# scripts/install.sh itself needs a manual `sudo bash scripts/install.sh`
+# re-run; only server/web code updates apply automatically on restart.
 set -uo pipefail
 
 APP_DIR="${CITYGUARD_APP_DIR:-/opt/cityguard-edge-monitor}"
