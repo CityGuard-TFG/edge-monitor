@@ -23,12 +23,9 @@ def _read_temperature_c():
     if _HailoDevice is None:
         return None
     try:
-        dev = _HailoDevice()
-        try:
+        with _HailoDevice() as dev:
             temp_info = dev.control.get_chip_temperature()
             return round((temp_info.ts0_temperature + temp_info.ts1_temperature) / 2, 1)
-        finally:
-            dev.close()
     except Exception:
         return None
 
