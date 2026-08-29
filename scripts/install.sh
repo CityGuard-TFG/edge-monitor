@@ -49,4 +49,4 @@ systemctl restart cityguard-edge-monitor.service
 
 ip_addr="$(hostname -I | awk '{print $1}')"
 echo "CityGuard Edge Monitor installed and running."
-echo "Dashboard reachable at: http://${ip_addr}:8090"
+echo "Dashboard reachable at: http://${ip_addr}"
