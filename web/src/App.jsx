@@ -3,6 +3,7 @@ import MetricCard from './components/MetricCard.jsx';
 import HailoCard from './components/HailoCard.jsx';
 import GpsCard from './components/GpsCard.jsx';
 import CameraPanel from './components/CameraPanel.jsx';
+import logoUrl from './assets/logo.png';
 
 function tempAccent(tempC) {
   if (tempC === null || tempC === undefined) return 'gray';
@@ -55,14 +56,21 @@ export default function App() {
   return (
     <div className="flex w-full flex-col gap-3 p-4 lg:h-dvh lg:overflow-hidden lg:p-5">
       <header className="flex flex-none flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-extrabold tracking-tight text-[color:var(--ink)]">
-            CityGuard Edge Monitor
-          </h1>
-          <p className="text-[0.75rem] text-[color:var(--muted)]">
-            {statusData?.hostname || 'connecting…'}
-            {primaryIp ? ` · ${primaryIp}` : ''}
-          </p>
+        <div className="flex items-center gap-3">
+          <img
+            src={logoUrl}
+            alt="CityGuard Logo"
+            className="h-10 w-10 object-contain rounded-lg border border-[color:var(--line)] bg-white p-1 shadow-sm"
+          />
+          <div>
+            <h1 className="text-xl font-extrabold tracking-tight text-[color:var(--ink)]">
+              CityGuard Edge Monitor
+            </h1>
+            <p className="text-[0.75rem] text-[color:var(--muted)]">
+              {statusData?.hostname || 'connecting…'}
+              {primaryIp ? ` · ${primaryIp}` : ''}
+            </p>
+          </div>
         </div>
         <div className="flex items-center gap-2 text-[0.7rem] text-[color:var(--muted)]">
           <span className={`live-dot ${isStale ? 'live-dot--stale' : 'live-dot--live'}`} />
