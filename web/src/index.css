@@ -1,0 +1,67 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --barca-red: #d30418;
+  --barca-red-deep: #c70316;
+  --barca-gold: #eca217;
+  --barca-gold-deep: #d98318;
+  --ink: #211d1d;
+  --muted: #6b6663;
+  --surface: #fbfaf8;
+  --card: #fffaf2;
+  --line: #e6e1da;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  background: radial-gradient(circle at 80% 0%, rgba(236, 162, 23, 0.1), transparent 32%),
+    radial-gradient(circle at 5% 15%, rgba(211, 4, 24, 0.06), transparent 30%), var(--surface);
+  color: var(--ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+}
+
+.live-dot {
+  background: var(--barca-gold);
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(236, 162, 23, 0.2);
+  display: inline-block;
+  height: 0.5rem;
+  width: 0.5rem;
+}
+
+.live-dot--stale {
+  background: #c9c4bd;
+  box-shadow: 0 0 0 4px rgba(201, 196, 189, 0.2);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.live-dot--live {
+  animation: pulse 1.8s ease-in-out infinite;
+}
