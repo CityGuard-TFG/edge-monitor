@@ -113,15 +113,22 @@ The installer is idempotent — re-run it after a `git pull` to redeploy.
 ### Automatic updates on startup
 
 Every time the service starts (boot, or a manual restart),
-`scripts/check-update.sh` runs first as `ExecStartPre`: it asks the GitHub
-Releases API for the latest published release, and if the Pi isn't already
-on that tag, `git fetch`es, checks it out, reinstalls backend dependencies,
-and rebuilds the frontend — all before `uvicorn` actually starts. It is
-deliberately fail-open: no network, a GitHub API hiccup, or a checkout that
-isn't a git clone all just mean "start with whatever's already on disk,"
-logged but never fatal to the unit. There is no background polling while the
-service is running — cutting a new release only takes effect on the next
-restart of `cityguard-edge-monitor.service` (or the next reboot).
+`scripts/check-update.sh` runs first as `ExecStartPre`, as the unprivileged
+`cityguard` user: it asks the GitHub Releases API for the latest published
+release, and if the Pi isn't already on that tag, `git fetch`es, checks it
+out, reinstalls backend dependencies, and rebuilds the frontend — all before
+`uvicorn` actually starts. It is deliberately fail-open: no network, a
+GitHub API hiccup, or a checkout that isn't a git clone all just mean "start
+with whatever's already on disk," logged but never fatal to the unit. There
+is no background polling while the service is running — cutting a new
+release only takes effect on the next restart of
+`cityguard-edge-monitor.service` (or the next reboot).
+
+This only updates application code (`server/`, `web/`). Because the update
+check itself runs unprivileged, it cannot touch `/etc/systemd/system` or run
+`systemctl daemon-reload` — a release that changes
+`systemd/cityguard-edge-monitor.service` or `scripts/install.sh` still needs
+a manual `sudo bash scripts/install.sh` re-run on the device.
 
 To ship an update: merge to `main`, then `git tag vX.Y.Z && git push --tags`.
 The Release workflow publishes it, and every deployed node picks it up the
