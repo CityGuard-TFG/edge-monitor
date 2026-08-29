@@ -102,10 +102,11 @@ The repository is public and has two GitHub Actions workflows:
 
    This installs Python/Node/git/curl system packages, creates a virtualenv,
    builds the frontend (`web/dist`), hands the whole tree to the `cityguard`
-   service account, installs `systemd/cityguard-edge-monitor.service`, and
-   enables it to start on boot. `cityguard` (created by
-   `edge/scripts/install-pi-runtime.sh`) already has `video`, `i2c`, `gpio`,
-   and `dialout` group membership.
+   account, installs `systemd/cityguard-edge-monitor.service`, and enables
+   it to start on boot. That account needs to already exist on the device
+   with `video`, `i2c`, `gpio`, and `dialout` group membership — on the
+   reference node this is the primary account set up in Raspberry Pi
+   Imager, not a separate service user created by any script here.
 3. Browse to `http://<pi-ip>` from any device on the same network.
 
 The installer is idempotent — re-run it after a `git pull` to redeploy.

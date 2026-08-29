@@ -16,7 +16,7 @@ fi
 [[ -d "${APP_DIR}/.git" ]] || echo "Warning: ${APP_DIR} is not a git checkout -- the startup update check will be skipped." >&2
 
 id -u "${SERVICE_USER}" >/dev/null 2>&1 || {
-  echo "Expected the ${SERVICE_USER} service account to already exist (created by edge/scripts/install-pi-runtime.sh)." >&2
+  echo "Expected the ${SERVICE_USER} account to already exist on this device." >&2
   exit 2
 }
 
