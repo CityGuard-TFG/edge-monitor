@@ -55,12 +55,29 @@ if ! git -C "${APP_DIR}" checkout --quiet --force "${latest_tag}"; then
 fi
 
 log "Reinstalling backend dependencies..."
-"${APP_DIR}/venv/bin/pip" install --quiet -r "${APP_DIR}/server/requirements.txt" \
-  || log "pip install reported errors -- continuing with what succeeded."
+pip_output="$("${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/server/requirements.txt" 2>&1)"
+if [[ $? -ne 0 ]]; then
+  log "pip install failed -- continuing with what succeeded. Last output:"
+  echo "${pip_output}" | tail -20
+fi
 
 log "Rebuilding frontend..."
-( cd "${APP_DIR}/web" && npm ci --silent && npm run build --silent ) \
-  || log "Frontend rebuild failed -- continuing with the previous build if one exists."
+# One retry: a transient npm-registry/network hiccup during ExecStartPre
+# shouldn't leave the node stuck on a stale bundle until the next release.
+build_frontend() {
+  ( cd "${APP_DIR}/web" && npm ci && npm run build ) 2>&1
+}
+frontend_output="$(build_frontend)"
+if [[ $? -ne 0 ]]; then
+  log "Frontend rebuild failed once -- retrying..."
+  frontend_output="$(build_frontend)"
+  if [[ $? -ne 0 ]]; then
+    log "Frontend rebuild failed again -- continuing with the previous build if one exists. Last output:"
+    echo "${frontend_output}" | tail -30
+  else
+    log "Frontend rebuild succeeded on retry."
+  fi
+fi
 
 log "Updated to ${latest_tag}."
 exit 0
