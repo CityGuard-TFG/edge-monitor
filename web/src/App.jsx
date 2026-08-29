@@ -25,6 +25,18 @@ function fmtUptime(seconds) {
   return `${minutes}m`;
 }
 
+function fmtFreq(mhz) {
+  if (mhz === null || mhz === undefined) return '—';
+  return mhz >= 1000 ? `${(mhz / 1000).toFixed(2)} GHz` : `${Math.round(mhz)} MHz`;
+}
+
+function wifiAccent(quality) {
+  if (quality === null || quality === undefined) return 'gray';
+  if (quality < 30) return 'red';
+  if (quality < 60) return 'gold';
+  return 'green';
+}
+
 export default function App() {
   const { data: statusData, lastUpdatedAt } = usePolling('/api/status', 2000);
   const { data: hailo } = usePolling('/api/hailo', 2000);
@@ -100,6 +112,28 @@ export default function App() {
             accent="gold"
           />
           <MetricCard label="Uptime" value={fmtUptime(statusData?.uptime_seconds)} accent="gray" />
+          <MetricCard
+            label="Hailo Temp"
+            value={hailo?.temperature_c !== null && hailo?.temperature_c !== undefined ? `${hailo.temperature_c}°C` : '—'}
+            accent={tempAccent(hailo?.temperature_c)}
+          />
+          <MetricCard
+            label="CPU Clock"
+            value={fmtFreq(statusData?.cpu_freq_mhz)}
+            accent="gray"
+          />
+          <MetricCard
+            label="Load Avg"
+            value={statusData?.load_avg_1m !== null && statusData?.load_avg_1m !== undefined ? statusData.load_avg_1m.toFixed(2) : '—'}
+            caption="1 minute"
+            accent="gray"
+          />
+          <MetricCard
+            label="WiFi Signal"
+            value={statusData?.wifi ? `${statusData.wifi.signal_dbm} dBm` : '—'}
+            caption={statusData?.wifi ? `${statusData.wifi.quality_percent}% quality` : 'no link'}
+            accent={statusData?.wifi ? wifiAccent(statusData.wifi.quality_percent) : 'gray'}
+          />
         </section>
 
         <section className="min-h-[240px] lg:min-h-0">

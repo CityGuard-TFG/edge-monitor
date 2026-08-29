@@ -111,6 +111,50 @@ def _read_disk():
         return {"used_gb": None, "total_gb": None, "percent": None}
 
 
+def _read_cpu_freq_mhz():
+    try:
+        freq = psutil.cpu_freq()
+        return round(freq.current, 0) if freq else None
+    except Exception:
+        return None
+
+
+def _read_load_avg_1m():
+    try:
+        return round(psutil.getloadavg()[0], 2)
+    except Exception:
+        return None
+
+
+def _read_wifi():
+    """Parse /proc/net/wireless for the first wireless interface's signal
+    level and link quality -- no subprocess needed, always present on Linux
+    even with no wireless hardware (just no interface lines to match)."""
+    try:
+        with open("/proc/net/wireless") as f:
+            lines = f.readlines()
+        for line in lines[2:]:
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+            iface, rest = line.split(":", 1)
+            fields = rest.split()
+            if len(fields) < 3:
+                continue
+            link_quality = float(fields[1])
+            signal_dbm = float(fields[2])
+            return {
+                "interface": iface,
+                "signal_dbm": signal_dbm,
+                # Quality is out of 70 for the common mac80211 drivers used
+                # on Pi OS's onboard/USB wifi chips.
+                "quality_percent": round(min(link_quality / 70.0 * 100, 100), 0),
+            }
+    except Exception:
+        pass
+    return None
+
+
 def _read_ip_addresses():
     addrs = {}
     try:
@@ -140,10 +184,13 @@ def get_status():
         "uptime_seconds": round(time.time() - _BOOT_TIME, 1),
         "cpu_percent": cpu_percent,
         "cpu_temp_c": _read_cpu_temp_c(),
+        "cpu_freq_mhz": _read_cpu_freq_mhz(),
+        "load_avg_1m": _read_load_avg_1m(),
         "power_w": _read_power_w(),
         "ram": _read_ram(),
         "disk": _read_disk(),
         "throttled": _read_throttled(),
+        "wifi": _read_wifi(),
         "ip_addresses": _read_ip_addresses(),
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
