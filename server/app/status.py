@@ -30,6 +30,40 @@ def _read_cpu_temp_c():
         return None
 
 
+def _read_power_w():
+    """Estimate total board power draw by summing current*voltage across every
+    PMIC rail reported by `vcgencmd pmic_read_adc` (Pi 5 only)."""
+    try:
+        out = subprocess.run(
+            ["vcgencmd", "pmic_read_adc"], capture_output=True, text=True, timeout=3
+        )
+        rails = {}
+        for line in out.stdout.splitlines():
+            # e.g. " 3V7_WL_SW_A current(0)=0.05562801A"
+            parts = line.split()
+            if len(parts) != 2 or "=" not in parts[1]:
+                continue
+            rail_name, reading = parts
+            try:
+                value = float(reading.split("=", 1)[1].rstrip("AV"))
+            except ValueError:
+                continue
+            if rail_name.endswith("_A"):
+                rails.setdefault(rail_name[:-2], {})["current_a"] = value
+            elif rail_name.endswith("_V"):
+                rails.setdefault(rail_name[:-2], {})["voltage_v"] = value
+
+        total = 0.0
+        found_any = False
+        for reading in rails.values():
+            if "current_a" in reading and "voltage_v" in reading:
+                total += reading["current_a"] * reading["voltage_v"]
+                found_any = True
+        return round(total, 2) if found_any else None
+    except Exception:
+        return None
+
+
 def _read_throttled():
     try:
         out = subprocess.run(
@@ -106,6 +140,7 @@ def get_status():
         "uptime_seconds": round(time.time() - _BOOT_TIME, 1),
         "cpu_percent": cpu_percent,
         "cpu_temp_c": _read_cpu_temp_c(),
+        "power_w": _read_power_w(),
         "ram": _read_ram(),
         "disk": _read_disk(),
         "throttled": _read_throttled(),

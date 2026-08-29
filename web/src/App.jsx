@@ -15,6 +15,16 @@ function fmtPercent(value) {
   return value === null || value === undefined ? '—' : `${Math.round(value)}%`;
 }
 
+function fmtUptime(seconds) {
+  if (seconds === null || seconds === undefined) return '—';
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
 export default function App() {
   const { data: statusData, lastUpdatedAt } = usePolling('/api/status', 2000);
   const { data: hailo } = usePolling('/api/hailo', 2000);
@@ -55,7 +65,7 @@ export default function App() {
         </div>
       )}
 
-      <section className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <section className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <MetricCard label="CPU" value={fmtPercent(statusData?.cpu_percent)} accent="gold" />
         <MetricCard
           label="RAM"
@@ -82,6 +92,13 @@ export default function App() {
           value={statusData?.cpu_temp_c !== null && statusData?.cpu_temp_c !== undefined ? `${statusData.cpu_temp_c}°C` : '—'}
           accent={tempAccent(statusData?.cpu_temp_c)}
         />
+        <MetricCard
+          label="Power"
+          value={statusData?.power_w !== null && statusData?.power_w !== undefined ? `${statusData.power_w} W` : '—'}
+          caption="internal rails"
+          accent="gold"
+        />
+        <MetricCard label="Uptime" value={fmtUptime(statusData?.uptime_seconds)} accent="gray" />
       </section>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2">

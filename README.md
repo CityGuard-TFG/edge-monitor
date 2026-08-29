@@ -37,11 +37,20 @@ All endpoints are `GET`, unauthenticated, and CORS-open.
 | Endpoint | Returns |
 |---|---|
 | `/api/health` | `{"ok": true}` liveness check |
-| `/api/status` | Hostname, uptime, CPU/RAM/disk usage, CPU temperature, under-voltage/throttling flags, IP addresses |
-| `/api/hailo` | Whether the Hailo-8L NPU responds to `hailortcli fw-control identify`, plus board/architecture/firmware |
+| `/api/status` | Hostname, uptime, CPU/RAM/disk usage, CPU temperature, estimated board power draw, under-voltage/throttling flags, IP addresses |
+| `/api/hailo` | Whether the Hailo-8L NPU responds to `hailortcli fw-control identify`, plus board/architecture/firmware/chip temperature |
 | `/api/gps` | Fix quality (none/2D/3D), latitude/longitude/altitude/speed, satellites used/visible, HDOP — read from a background gpsd client |
 | `/api/camera/snapshot.jpg` | An on-demand JPEG frame from the camera, throttled to at most one real capture every 2 seconds |
 | `/api/camera/status` | Whether the last capture succeeded and how old the cached frame is, without triggering a new capture |
+
+`power_w` is an estimate from `vcgencmd pmic_read_adc`, summed over every
+PMIC rail that reports both current and voltage. It covers the Pi 5's own
+internal regulators, not the full board — power drawn by the Hailo HAT+,
+camera, and GPS over the 5V rail isn't separately metered by the PMIC, so
+this number is a lower bound on total system draw, not the whole picture.
+The Hailo-8L itself doesn't expose a "utilization" figure until a real
+inference workload is running on it (Phase 2); until then the dashboard
+shows it as idle, which is accurate rather than a missing feature.
 
 ## Local development
 
@@ -61,22 +70,59 @@ Off the Pi, `/api/hailo`, `/api/gps`, and `/api/camera/*` will simply report
 "not detected" / "unavailable" — every hardware read degrades gracefully
 rather than raising, by design.
 
+## Releases and CI
+
+The repository is public and has two GitHub Actions workflows:
+
+- **CI** (`.github/workflows/ci.yml`) — on every push/PR to `dev` or `main`,
+  byte-compiles the backend and runs a real `npm run build` of the frontend.
+  This is a build check, not a hardware test — it can't exercise `/api/hailo`,
+  `/api/gps`, or the camera, which only mean anything on the real device.
+- **Release** (`.github/workflows/release.yml`) — pushing a tag matching
+  `v*.*.*` (e.g. `v0.2.0`) automatically publishes a GitHub Release at that
+  tag with auto-generated notes. This is what the Pi checks against — see
+  below.
+
 ## Deployment (on the Pi)
 
-1. Copy a reviewed checkout of this repository to `/opt/cityguard-edge-monitor`
-   on the device.
+1. Clone the repository to `/opt/cityguard-edge-monitor` on the device (a
+   real `git clone`, not a tarball or `git archive` dump — the startup update
+   check needs an actual `.git` directory to `fetch`/`checkout` against):
+
+   ```bash
+   sudo git clone https://github.com/CityGuard-TFG/edge-monitor.git /opt/cityguard-edge-monitor
+   ```
+
 2. Run the installer as root:
 
    ```bash
+   cd /opt/cityguard-edge-monitor
    sudo bash scripts/install.sh
    ```
 
-   This installs Python/Node system packages, creates a virtualenv, builds
-   the frontend (`web/dist`), installs
-   `systemd/cityguard-edge-monitor.service`, and enables it to start on boot.
-   It runs as the existing `cityguard` service account (created by
-   `edge/scripts/install-pi-runtime.sh`), which already has `video`, `i2c`,
-   `gpio`, and `dialout` group membership.
+   This installs Python/Node/git/curl system packages, creates a virtualenv,
+   builds the frontend (`web/dist`), hands the whole tree to the `cityguard`
+   service account, installs `systemd/cityguard-edge-monitor.service`, and
+   enables it to start on boot. `cityguard` (created by
+   `edge/scripts/install-pi-runtime.sh`) already has `video`, `i2c`, `gpio`,
+   and `dialout` group membership.
 3. Browse to `http://<pi-ip>:8090` from any device on the same network.
 
 The installer is idempotent — re-run it after a `git pull` to redeploy.
+
+### Automatic updates on startup
+
+Every time the service starts (boot, or a manual restart),
+`scripts/check-update.sh` runs first as `ExecStartPre`: it asks the GitHub
+Releases API for the latest published release, and if the Pi isn't already
+on that tag, `git fetch`es, checks it out, reinstalls backend dependencies,
+and rebuilds the frontend — all before `uvicorn` actually starts. It is
+deliberately fail-open: no network, a GitHub API hiccup, or a checkout that
+isn't a git clone all just mean "start with whatever's already on disk,"
+logged but never fatal to the unit. There is no background polling while the
+service is running — cutting a new release only takes effect on the next
+restart of `cityguard-edge-monitor.service` (or the next reboot).
+
+To ship an update: merge to `main`, then `git tag vX.Y.Z && git push --tags`.
+The Release workflow publishes it, and every deployed node picks it up the
+next time its service restarts.

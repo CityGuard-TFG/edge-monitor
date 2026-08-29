@@ -7,11 +7,30 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
+try:
+    from hailo_platform import Device as _HailoDevice
+except ImportError:
+    _HailoDevice = None
+
 router = APIRouter()
 
 _CACHE_TTL_SECONDS = 10
 _cache_lock = threading.Lock()
 _cache = {"result": None, "fetched_at": 0.0}
+
+
+def _read_temperature_c():
+    if _HailoDevice is None:
+        return None
+    try:
+        dev = _HailoDevice()
+        try:
+            temp_info = dev.control.get_chip_temperature()
+            return round((temp_info.ts0_temperature + temp_info.ts1_temperature) / 2, 1)
+        finally:
+            dev.close()
+    except Exception:
+        return None
 
 
 def _identify():
@@ -20,6 +39,7 @@ def _identify():
         "board_name": None,
         "architecture": None,
         "firmware_version": None,
+        "temperature_c": None,
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "error": None,
     }
@@ -59,6 +79,8 @@ def _identify():
     result["detected"] = result["board_name"] is not None
     if not result["detected"] and result["error"] is None:
         result["error"] = "identify returned no board information"
+    if result["detected"]:
+        result["temperature_c"] = _read_temperature_c()
     return result
 
 

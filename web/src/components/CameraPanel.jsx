@@ -32,7 +32,7 @@ export default function CameraPanel() {
           </small>
         )}
       </div>
-      <div className="relative aspect-video overflow-hidden rounded-lg bg-black">
+      <div className="relative aspect-video w-full max-w-xs overflow-hidden rounded-lg bg-black sm:max-w-sm">
         {unavailable || imgError ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-[0.75rem] text-gray-300">
             <span>Camera unavailable</span>

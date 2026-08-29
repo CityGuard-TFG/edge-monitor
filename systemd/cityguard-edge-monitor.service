@@ -9,6 +9,10 @@ User=cityguard
 Group=cityguard
 WorkingDirectory=/opt/cityguard-edge-monitor/server
 Environment=PYTHONUNBUFFERED=1
+# Best-effort: checks GitHub for a newer release and updates the checkout in
+# place before starting. The leading '-' means a failure here never blocks
+# the unit -- the script itself is also written to always exit 0.
+ExecStartPre=-/opt/cityguard-edge-monitor/scripts/check-update.sh
 ExecStart=/opt/cityguard-edge-monitor/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8090
 Restart=always
 RestartSec=5
@@ -17,6 +21,8 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
+# ExecStartPre above needs to git checkout / pip install / npm build in place.
+ReadWritePaths=/opt/cityguard-edge-monitor
 
 [Install]
 WantedBy=multi-user.target
