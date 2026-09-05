@@ -28,10 +28,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
-from libcamera import Transform
-from picamera2 import Picamera2
 
 from . import gps_client, gpx_recorder, imu
+
+try:
+    from libcamera import Transform
+    from picamera2 import Picamera2
+except ImportError:  # pragma: no cover - not present off-device (e.g. CI)
+    Transform = None
+    Picamera2 = None
 
 logger = logging.getLogger("cityguard.edge_monitor.collection")
 router = APIRouter()
@@ -247,6 +252,9 @@ def _disk_guard_loop(collection_dir: Path, stop_event: threading.Event) -> None:
 
 @router.post("/collection/start", status_code=201)
 def start_collection():
+    if Picamera2 is None:
+        raise HTTPException(status_code=500, detail="picamera2/libcamera not available on this host")
+
     with _lock:
         if _state["recording"]:
             raise HTTPException(status_code=409, detail="Data collection is already recording")
