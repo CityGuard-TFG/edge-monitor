@@ -1,21 +1,30 @@
-"""Data collection mode: adaptive-interval + IMU-triggered still capture,
-plus a GPX track. A deliberate, narrow exception to this repo's normal
-"never persist raw frames" rule (see camera.py's docstring and the root
-README) -- used only for supervised drives gathering fine-tuning footage.
-Off by default, must be started explicitly every time (no auto-resume
-across a restart/reboot), and nothing here uploads anywhere automatically.
+"""Data collection mode: still capture at the camera's max sustainable
+rate while moving, plus a GPX track. A deliberate, narrow exception to
+this repo's normal "never persist raw frames" rule (see camera.py's
+docstring and the root README) -- used only for supervised drives
+gathering fine-tuning footage. Off by default, must be started explicitly
+every time (no auto-resume across a restart/reboot), and nothing here
+uploads anywhere automatically.
 
 Captures full-resolution (4608x2592) JPEG stills via a persistent
-`picamera2` process, not video: a sustained on-device benchmark showed this
-matches the production pipeline's own capture paradigm
-(edge/runtime/src/sensors.py's speed-adaptive interval + IMU-triggered
-event capture) far more closely than continuous video ever could, at a
-fraction of the CPU/thermal cost -- see
+`picamera2` process, not video: a sustained on-device benchmark showed
+stills beat continuous video outright on CPU/thermal/storage cost -- see
 knowledge-base/03-hardware-deployment.md's "Capture mode benchmark and
-redesign" for the full measurements. The interval thresholds and the
-1.5g vibration threshold below are ported from that same sensors.py, not
-re-derived, so the collected dataset and the deployed capture behavior
-stay in sync.
+redesign" for the full measurements.
+
+There is deliberately no IMU/vibration-triggered burst here (an earlier
+version had one, ported from edge/runtime/src/sensors.py -- removed, see
+the KB's "IMU-triggered burst capture (considered, discarded)" entry for
+why): a reactive trigger fires only after the vehicle is already on top of
+the pothole, so a forward-facing camera can no longer see it by the time
+any capture happens, no matter how fast the reaction. Coverage instead
+comes entirely from capturing as densely as the hardware allows while
+moving -- cheap to do (measured ~0.2-0.7 of 4 cores, well under 45C even
+at max sustained rate) and the only mechanism here that is geometrically
+capable of catching a defect before the vehicle reaches it. An unknown/no
+GPS fix is treated as moving, not stationary: missing a data-collection
+frame during a real signal dropout is worse than a handful of redundant
+frames while genuinely parked.
 """
 
 from __future__ import annotations
@@ -29,7 +38,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Response
 
-from . import gps_client, gpx_recorder, imu
+from . import gps_client, gpx_recorder
 
 try:
     from libcamera import Transform
@@ -47,20 +56,11 @@ _LOW_DISK_RESERVE_BYTES = 5 * 1024**3
 _CAPTURE_WIDTH = 4608
 _CAPTURE_HEIGHT = 2592
 
-# Ported from edge/runtime/src/sensors.py -- keep these in sync with that
-# file rather than retuning independently, so the dataset this collects
-# matches the interval/event behavior the deployed pipeline actually uses.
+# Below this speed, treat the vehicle as parked and stop capturing --
+# `None` (no GPS fix at all) is NOT treated as stationary, see module
+# docstring: a dropout during real driving must not silently skip frames.
 _SPEED_STATIONARY_KMH = 3.0
-_SPEED_SLOW_KMH = 15.0
-_SPEED_FAST_KMH = 50.0
-_INTERVAL_STATIONARY_S = 0.0  # 0 = skip capture entirely
-_INTERVAL_SLOW_S = 5.0
-_INTERVAL_NORMAL_S = 2.5
-_INTERVAL_FAST_S = 1.5
-
-_EVENT_BURST_SHOTS = 3
-_EVENT_BURST_GAP_S = 0.15
-_POLL_GRANULARITY_S = 0.5
+_STATIONARY_POLL_S = 0.5
 
 _lock = threading.Lock()
 _state: dict = {
@@ -71,10 +71,9 @@ _state: dict = {
     "stop_event": None,
     "picam2": None,
     "shot_count": 0,
-    "event_count": 0,
     "total_bytes": 0,
     "current_speed_kmh": None,
-    "current_interval_s": None,
+    "capturing": False,
     "error": None,
 }
 
@@ -84,14 +83,8 @@ def is_recording() -> bool:
         return _state["recording"]
 
 
-def _interval_for_speed(speed_kmh: float | None) -> float:
-    if speed_kmh is None or speed_kmh < _SPEED_STATIONARY_KMH:
-        return _INTERVAL_STATIONARY_S
-    if speed_kmh < _SPEED_SLOW_KMH:
-        return _INTERVAL_SLOW_S
-    if speed_kmh < _SPEED_FAST_KMH:
-        return _INTERVAL_NORMAL_S
-    return _INTERVAL_FAST_S
+def _is_stationary(speed_kmh: float | None) -> bool:
+    return speed_kmh is not None and speed_kmh < _SPEED_STATIONARY_KMH
 
 
 def _capture_one(picam2: Picamera2, collection_dir: Path) -> int:
@@ -115,37 +108,19 @@ def _capture_loop(collection_dir: Path, stop_event: threading.Event) -> None:
 
         while not stop_event.is_set():
             speed_kmh = gps_client.get_gps().get("speed_kmh")
-            interval = _interval_for_speed(speed_kmh)
+            stationary = _is_stationary(speed_kmh)
             with _lock:
                 _state["current_speed_kmh"] = speed_kmh
-                _state["current_interval_s"] = interval
+                _state["capturing"] = not stationary
 
-            if imu.peek_event():
-                added_bytes = 0
-                for _ in range(_EVENT_BURST_SHOTS):
-                    added_bytes += _capture_one(picam2, collection_dir)
-                    if stop_event.wait(_EVENT_BURST_GAP_S):
-                        break
-                with _lock:
-                    _state["shot_count"] += _EVENT_BURST_SHOTS
-                    _state["event_count"] += 1
-                    _state["total_bytes"] += added_bytes
+            if stationary:
+                stop_event.wait(_STATIONARY_POLL_S)
                 continue
 
-            if interval > 0:
-                added_bytes = _capture_one(picam2, collection_dir)
-                with _lock:
-                    _state["shot_count"] += 1
-                    _state["total_bytes"] += added_bytes
-                remaining = interval
-                while remaining > 0 and not stop_event.is_set():
-                    step = min(_POLL_GRANULARITY_S, remaining)
-                    if stop_event.wait(step):
-                        break
-                    remaining -= step
-            else:
-                # Stationary: don't busy-loop, just poll speed periodically.
-                stop_event.wait(_POLL_GRANULARITY_S)
+            added_bytes = _capture_one(picam2, collection_dir)
+            with _lock:
+                _state["shot_count"] += 1
+                _state["total_bytes"] += added_bytes
     except Exception as exc:
         logger.exception("Capture loop failed")
         with _lock:
@@ -174,20 +149,18 @@ def _build_status() -> dict:
         started_at = _state["started_at"]
         collection_dir = _state["collection_dir"]
         shot_count = _state["shot_count"]
-        event_count = _state["event_count"]
         total_bytes = _state["total_bytes"]
         current_speed_kmh = _state["current_speed_kmh"]
-        current_interval_s = _state["current_interval_s"]
+        capturing = _state["capturing"]
         error = _state["error"]
 
     if collection_dir is None:
         return {
             "recording": False, "started_at": None, "elapsed_seconds": 0.0,
-            "collection_dir": None, "shot_count": 0, "event_count": 0,
+            "collection_dir": None, "shot_count": 0,
             "total_bytes": 0, "bytes_per_second": 0.0, "free_bytes": None,
             "estimated_hours_remaining": None, "gpx_points": 0,
-            "current_speed_kmh": None, "current_interval_s": None,
-            "current_vibration_g": None, "error": error,
+            "current_speed_kmh": None, "capturing": False, "error": error,
         }
 
     elapsed_seconds = max(1.0, (datetime.now(timezone.utc) - started_at).total_seconds()) if started_at else 1.0
@@ -203,15 +176,13 @@ def _build_status() -> dict:
         "elapsed_seconds": round(elapsed_seconds, 1),
         "collection_dir": str(collection_dir),
         "shot_count": shot_count,
-        "event_count": event_count,
         "total_bytes": total_bytes,
         "bytes_per_second": round(bytes_per_second, 1),
         "free_bytes": free_bytes,
         "estimated_hours_remaining": estimated_hours_remaining,
         "gpx_points": gpx_recorder.point_count(collection_dir),
         "current_speed_kmh": current_speed_kmh,
-        "current_interval_s": current_interval_s,
-        "current_vibration_g": imu.latest_vibration_g(),
+        "capturing": capturing,
         "error": error,
     }
 
@@ -224,7 +195,6 @@ def _stop_locked(error: str | None = None) -> None:
         stop_event.set()
     if thread is not None:
         thread.join(timeout=5)
-    imu.stop()
     gpx_recorder.stop()
     collection_dir = _state["collection_dir"]
     if collection_dir is not None:
@@ -235,7 +205,7 @@ def _stop_locked(error: str | None = None) -> None:
     _state["stop_event"] = None
     _state["picam2"] = None
     _state["current_speed_kmh"] = None
-    _state["current_interval_s"] = None
+    _state["capturing"] = False
     if error is not None:
         _state["error"] = error
 
@@ -276,13 +246,12 @@ def start_collection():
         )
         disk_guard_thread.start()
 
-        imu.start()
         gpx_recorder.start(collection_dir)
 
         _state.update({
             "recording": True, "started_at": started_at, "collection_dir": collection_dir,
             "capture_thread": capture_thread, "stop_event": stop_event,
-            "shot_count": 0, "event_count": 0, "total_bytes": 0, "error": None,
+            "shot_count": 0, "total_bytes": 0, "error": None,
         })
 
     return _build_status()

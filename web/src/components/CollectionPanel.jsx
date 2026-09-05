@@ -73,15 +73,14 @@ export default function CollectionPanel() {
         {status?.recording && (
           <div className="mt-2 text-[0.75rem] text-[color:var(--muted)]">
             <p>Elapsed: {formatTime(status.elapsed_seconds)}</p>
-            <p>Shots: {status.shot_count} ({status.event_count} vibration-triggered)</p>
+            <p>Shots: {status.shot_count}</p>
             <p>Size: {formatBytes(status.total_bytes)}</p>
             <p>Storage remaining: {status.estimated_hours_remaining !== null ? `${status.estimated_hours_remaining.toFixed(1)} hours` : 'calculating…'}</p>
             <p>
               Speed: {status.current_speed_kmh !== null ? `${status.current_speed_kmh.toFixed(0)} km/h` : 'no GPS fix'}
               {' · '}
-              Interval: {status.current_interval_s === 0 ? 'stationary (skipping)' : status.current_interval_s !== null ? `${status.current_interval_s}s` : '—'}
+              {status.capturing ? 'capturing' : 'stationary (paused)'}
             </p>
-            <p>Vibration: {status.current_vibration_g !== null ? `${status.current_vibration_g.toFixed(2)} g` : 'IMU unavailable'}</p>
           </div>
         )}
       </div>
