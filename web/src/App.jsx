@@ -3,6 +3,7 @@ import MetricCard from './components/MetricCard.jsx';
 import HailoCard from './components/HailoCard.jsx';
 import GpsCard from './components/GpsCard.jsx';
 import CameraPanel from './components/CameraPanel.jsx';
+import CollectionPanel from './components/CollectionPanel.jsx';
 import logoUrl from './assets/logo.png';
 
 function tempAccent(tempC) {
@@ -151,6 +152,7 @@ export default function App() {
         <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1 lg:overflow-y-auto">
           <HailoCard hailo={hailo} />
           <GpsCard gps={gps} />
+          <CollectionPanel />
         </section>
       </div>
     </div>

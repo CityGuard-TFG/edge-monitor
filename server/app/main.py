@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from . import camera, gps_client, hailo, status
+from . import camera, collection, gps_client, hailo, status
 
 logger = logging.getLogger("cityguard.edge_monitor")
 
@@ -20,7 +20,7 @@ app = FastAPI(title="CityGuard Edge Monitor")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
 
@@ -39,6 +39,7 @@ app.include_router(status.router, prefix="/api")
 app.include_router(hailo.router, prefix="/api")
 app.include_router(gps_client.router, prefix="/api")
 app.include_router(camera.router, prefix="/api")
+app.include_router(collection.router, prefix="/api")
 
 # Serve the built frontend (web/dist), mounted after /api so /api/* keeps
 # priority. server/app/main.py -> ../../web/dist.

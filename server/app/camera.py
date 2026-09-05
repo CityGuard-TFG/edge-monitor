@@ -12,6 +12,8 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Response
 
+from . import collection
+
 router = APIRouter()
 
 _MIN_CAPTURE_INTERVAL_SECONDS = 2.0
@@ -80,6 +82,8 @@ def _get_frame():
         return cached_bytes, None
 
     jpeg_bytes, error = _capture_now()
+    if jpeg_bytes is None and collection.is_recording():
+        error = "camera busy: data collection recording in progress"
 
     with _lock:
         if jpeg_bytes is not None:
