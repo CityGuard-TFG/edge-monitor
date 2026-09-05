@@ -1,3 +1,4 @@
 fastapi>=0.115
 uvicorn[standard]>=0.30
 psutil>=6.0
+smbus2>=0.4

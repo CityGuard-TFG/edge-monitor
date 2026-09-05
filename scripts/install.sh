@@ -21,10 +21,13 @@ id -u "${SERVICE_USER}" >/dev/null 2>&1 || {
 }
 
 apt-get update
-apt-get install -y --no-install-recommends python3 python3-venv python3-pip python3-gps nodejs npm git curl
+apt-get install -y --no-install-recommends python3 python3-venv python3-pip python3-gps python3-picamera2 nodejs npm git curl
 
-# --system-site-packages: /api/gps depends on `import gps`, provided by the
-# apt package python3-gps, not a PyPI package -- an isolated venv can't see it.
+# --system-site-packages: /api/gps depends on `import gps` (apt package
+# python3-gps) and /api/collection depends on `import picamera2`/`libcamera`
+# (apt package python3-picamera2) -- both are OS-provided bindings matched to
+# this device's libcamera/libpisp build, not PyPI packages an isolated venv
+# could see on its own.
 python3 -m venv --system-site-packages "${APP_DIR}/venv"
 "${APP_DIR}/venv/bin/pip" install --upgrade pip
 "${APP_DIR}/venv/bin/pip" install -r "${APP_DIR}/server/requirements.txt"
