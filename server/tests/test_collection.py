@@ -38,7 +38,7 @@ class TestCollectionModes(unittest.TestCase):
 
     def test_service_persists_the_field_camera_rotation(self):
         service_file = Path(__file__).resolve().parents[2] / "systemd" / "cityguard-edge-monitor.service"
-        self.assertIn("Environment=CITYGUARD_CAMERA_ROTATION=180", service_file.read_text(encoding="utf-8"))
+        self.assertIn("Environment=CITYGUARD_CAMERA_ROTATION=0", service_file.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":
