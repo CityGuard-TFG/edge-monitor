@@ -42,6 +42,30 @@ All endpoints are `GET`, unauthenticated, and CORS-open.
 | `/api/gps` | Fix quality (none/2D/3D), latitude/longitude/altitude/speed, satellites used/visible, HDOP — read from a background gpsd client |
 | `/api/camera/snapshot.jpg` | An on-demand JPEG frame from the camera, throttled to at most one real capture every 2 seconds |
 | `/api/camera/status` | Whether the last capture succeeded and how old the cached frame is, without triggering a new capture |
+| `/api/collection/start?mode=…` | Starts one explicitly selected, local-only supervised capture session |
+| `/api/collection/stop` | Stops and finalises the current supervised capture session |
+| `/api/collection/status` | Current mode, capture count, storage estimate, camera focus setup, and errors |
+
+### Supervised capture-quality tests
+
+The dashboard's **Capture test** panel is a temporary field-qualification
+tool, not part of the operational capture/privacy/upload path. It offers only
+four named modes: legacy fixed-focus stills, continuous-autofocus stills,
+autofocus-converged-and-locked stills, and an experimental full-resolution
+MJPEG video baseline. A person must choose a mode for every session; no mode
+resumes after a restart.
+
+Each still session is kept under `~/cityguard-collection/` with a `session.json`,
+a GPX track, and `capture-metadata.csv`. The CSV associates every JPEG with
+its lens position, autofocus state, FocusFoM, exposure time, analogue gain,
+and frame duration. The MJPEG session deliberately carries an explicit
+limitation in `session.json`: equivalent autofocus metadata cannot be
+recovered for individual encoded frames. It is included only as a comparison
+baseline, not as a production candidate.
+
+Run one mode per loop with the same route, mounting, and lighting. These are
+raw local artifacts: do not upload them or expose this unauthenticated LAN
+dashboard while driving outside the supervised test scope.
 
 `power_w` is an estimate from `vcgencmd pmic_read_adc`, summed over every
 PMIC rail that reports both current and voltage. It covers the Pi 5's own
