@@ -36,6 +36,10 @@ class TestCollectionModes(unittest.TestCase):
         self.assertIn("continuous", command)
         self.assertEqual(command[-1], str(Path("/tmp/capture.mjpeg")))
 
+    def test_service_persists_the_field_camera_rotation(self):
+        service_file = Path(__file__).resolve().parents[2] / "systemd" / "cityguard-edge-monitor.service"
+        self.assertIn("Environment=CITYGUARD_CAMERA_ROTATION=0", service_file.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
