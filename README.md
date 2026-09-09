@@ -55,6 +55,12 @@ autofocus-converged-and-locked stills, and an experimental full-resolution
 MJPEG video baseline. A person must choose a mode for every session; no mode
 resumes after a restart.
 
+Continuous autofocus is the default when an API client starts collection
+without a mode, and it is the first, recommended dashboard choice. This was
+selected after the 2026-09-08 vehicle qualification; use it for ordinary
+short collection runs. The other controls are retained only for explicit
+comparison or repair validation.
+
 Each still session is kept under `~/cityguard-collection/` with a `session.json`,
 a GPX track, and `capture-metadata.csv`. The CSV associates every JPEG with
 its lens position, autofocus state, FocusFoM, exposure time, analogue gain,

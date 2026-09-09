@@ -60,6 +60,9 @@ class CaptureMode(str, Enum):
     MJPEG_VIDEO_BASELINE = "mjpeg-video-baseline"
 
 
+DEFAULT_CAPTURE_MODE = CaptureMode.CONTINUOUS_AF_STILL
+
+
 MODE_DETAILS = {
     CaptureMode.FIXED_STILL: {
         "label": "Fixed focus stills (legacy baseline)", "kind": "still",
@@ -297,7 +300,7 @@ def _disk_guard_loop(collection_dir: Path, stop_event: threading.Event) -> None:
 
 
 @router.post("/collection/start", status_code=201)
-def start_collection(mode: CaptureMode = Query(CaptureMode.FIXED_STILL)):
+def start_collection(mode: CaptureMode = Query(DEFAULT_CAPTURE_MODE)):
     if Picamera2 is None:
         raise HTTPException(status_code=500, detail="picamera2/libcamera not available on this host")
     with _lock:

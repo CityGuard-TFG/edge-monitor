@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.collection import (
     CaptureMode,
+    DEFAULT_CAPTURE_MODE,
     MODE_DETAILS,
     _metadata_row,
     _video_command,
@@ -10,6 +11,9 @@ from app.collection import (
 
 
 class TestCollectionModes(unittest.TestCase):
+    def test_continuous_autofocus_is_the_default_collection_mode(self):
+        self.assertEqual(DEFAULT_CAPTURE_MODE, CaptureMode.CONTINUOUS_AF_STILL)
+
     def test_all_named_modes_have_a_display_contract(self):
         self.assertEqual(set(CaptureMode), set(MODE_DETAILS))
         self.assertEqual(MODE_DETAILS[CaptureMode.FIXED_STILL]["kind"], "still")
