@@ -9,7 +9,6 @@ from app.gps_client import (
     _sat_cache,
     _state,
     _apply_tpv,
-    _apply_sky,
 )
 
 
