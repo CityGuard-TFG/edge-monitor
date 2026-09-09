@@ -100,7 +100,7 @@ def _get_frame():
 
 @router.get("/camera/snapshot.jpg")
 def get_snapshot():
-    jpeg_bytes, error = _get_frame()
+    jpeg_bytes, _ = _get_frame()
     if jpeg_bytes is None:
         return Response(
             content='{"error": "camera unavailable"}',
