@@ -3,14 +3,14 @@ import { usePolling } from '../hooks/usePolling.js';
 
 const modes = [
   {
+    id: 'continuous-af-still',
+    label: 'Continuous autofocus (recommended)',
+    detail: 'Selected from vehicle qualification · full-resolution JPEGs',
+  },
+  {
     id: 'fixed-still',
     label: 'Fixed focus stills',
     detail: 'Legacy baseline · full-resolution JPEGs',
-  },
-  {
-    id: 'continuous-af-still',
-    label: 'Continuous autofocus',
-    detail: 'AF adjusts during the route · full-resolution JPEGs',
   },
   {
     id: 'locked-af-still',
