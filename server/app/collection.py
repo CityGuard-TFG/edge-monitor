@@ -43,6 +43,7 @@ _CAPTURE_HEIGHT = 2592
 _SPEED_STATIONARY_KMH = 3.0
 _STATIONARY_POLL_S = 0.5
 _FOCUS_SETTLE_TIMEOUT_S = 5.0
+_STOP_JOIN_TIMEOUT_S = 15.0
 _METADATA_FILENAME = "capture-metadata.csv"
 _SESSION_FILENAME = "session.json"
 _METADATA_FIELDS = [
@@ -89,6 +90,7 @@ _state: dict[str, Any] = {
     "video_process": None, "shot_count": 0, "total_bytes": 0,
     "current_speed_kmh": None, "capturing": False, "error": None,
     "mode": None, "focus_configuration": None,
+    "stopping": False,
 }
 
 
@@ -149,23 +151,39 @@ def _configure_focus(picam2: Picamera2, mode: CaptureMode) -> dict[str, Any]:
     raise RuntimeError("Autofocus did not converge within 5 seconds; locked-focus session was not started")
 
 
-def _capture_one(picam2: Picamera2, collection_dir: Path, mode: CaptureMode, writer: csv.DictWriter) -> int:
+def _capture_one(picam2: Picamera2, collection_dir: Path, staging_dir: Path,
+                 mode: CaptureMode, writer: csv.DictWriter) -> int:
+    """Promote only a non-empty complete JPEG, then write its metadata row."""
     name_timestamp, iso_timestamp = _capture_timestamp()
     out_path = collection_dir / f"{name_timestamp}.jpg"
+    staged_path = staging_dir / out_path.name
     request = picam2.capture_request()
     try:
-        request.save("main", str(out_path))
+        request.save("main", str(staged_path))
         metadata = request.get_metadata()
     finally:
         request.release()
+    if not staged_path.is_file() or staged_path.stat().st_size == 0:
+        staged_path.unlink(missing_ok=True)
+        raise OSError(f"Camera wrote an empty JPEG for {out_path.name}")
+    with staged_path.open("rb") as handle:
+        header = handle.read(2)
+        handle.seek(-2, os.SEEK_END)
+        trailer = handle.read(2)
+    if header != b"\xff\xd8" or trailer != b"\xff\xd9":
+        staged_path.unlink(missing_ok=True)
+        raise OSError(f"Camera wrote an incomplete JPEG for {out_path.name}")
+    os.replace(staged_path, out_path)
     writer.writerow(_metadata_row(out_path.name, iso_timestamp, mode, metadata))
-    return out_path.stat().st_size if out_path.exists() else 0
+    return out_path.stat().st_size
 
 
 def _capture_loop(collection_dir: Path, stop_event: threading.Event, mode: CaptureMode) -> None:
     transform = Transform(hflip=1, vflip=1) if _CAMERA_ROTATION == "180" else Transform()
     picam2 = Picamera2()
+    staging_dir = collection_dir / ".partial"
     try:
+        staging_dir.mkdir()
         config = picam2.create_still_configuration(main={"size": (_CAPTURE_WIDTH, _CAPTURE_HEIGHT)}, transform=transform)
         picam2.configure(config)
         picam2.start()
@@ -187,7 +205,7 @@ def _capture_loop(collection_dir: Path, stop_event: threading.Event, mode: Captu
                 if stationary:
                     stop_event.wait(_STATIONARY_POLL_S)
                     continue
-                added_bytes = _capture_one(picam2, collection_dir, mode, writer)
+                added_bytes = _capture_one(picam2, collection_dir, staging_dir, mode, writer)
                 handle.flush()
                 with _lock:
                     _state["shot_count"] += 1
@@ -204,6 +222,7 @@ def _capture_loop(collection_dir: Path, stop_event: threading.Event, mode: Captu
             pass
         with _lock:
             _state["picam2"] = None
+        shutil.rmtree(staging_dir, ignore_errors=True)
 
 
 def _video_command(output_path: Path) -> list[str]:
@@ -248,8 +267,12 @@ def _video_loop(collection_dir: Path, stop_event: threading.Event, mode: Capture
 def _build_status() -> dict[str, Any]:
     with _lock:
         thread = _state["capture_thread"]
-        if _state["recording"] and thread is not None and not thread.is_alive():
-            _stop_locked(error=_state["error"] or "Recording stopped: capture thread exited unexpectedly.")
+        finalise_exited_thread = _state["recording"] and thread is not None and not thread.is_alive()
+        exited_collection_dir = _state["collection_dir"]
+        exited_error = _state["error"]
+    if finalise_exited_thread:
+        _finalise_stop(thread, exited_collection_dir, exited_error or "Recording stopped: capture thread exited unexpectedly.")
+    with _lock:
         recording, started_at, collection_dir = _state["recording"], _state["started_at"], _state["collection_dir"]
         values = {key: _state[key] for key in ("shot_count", "total_bytes", "current_speed_kmh", "capturing", "error", "mode", "focus_configuration")}
     available_modes = {mode.value: MODE_DETAILS[mode] for mode in CaptureMode}
@@ -272,30 +295,47 @@ def _build_status() -> dict[str, Any]:
             "focus_configuration": values["focus_configuration"], "available_modes": available_modes}
 
 
-def _stop_locked(error: str | None = None) -> None:
-    """Caller must hold _lock."""
-    stop_event, thread = _state["stop_event"], _state["capture_thread"]
-    if stop_event is not None:
-        stop_event.set()
+def _finalise_stop(thread: threading.Thread | None, collection_dir: Path | None,
+                   error: str | None = None) -> None:
+    """Wait without the state lock, then publish a fully finalised session."""
     if thread is not None:
-        thread.join(timeout=5)
+        thread.join(timeout=_STOP_JOIN_TIMEOUT_S)
+        if thread.is_alive():
+            with _lock:
+                _state["stopping"] = False
+                _state["error"] = "Recording stop is still waiting for the active camera request."
+            raise TimeoutError("Timed out waiting for capture finalisation")
     gpx_recorder.stop()
-    collection_dir = _state["collection_dir"]
     if collection_dir is not None:
         (collection_dir / f"{collection_dir.name}.gpx").write_text(gpx_recorder.write_gpx(collection_dir), encoding="utf-8")
-    _state.update({"recording": False, "capture_thread": None, "stop_event": None, "picam2": None,
-                   "video_process": None, "current_speed_kmh": None, "capturing": False})
-    if error is not None:
-        _state["error"] = error
+    with _lock:
+        if _state["capture_thread"] is not thread:
+            return
+        _state.update({"recording": False, "capture_thread": None, "stop_event": None, "picam2": None,
+                       "video_process": None, "current_speed_kmh": None, "capturing": False, "stopping": False})
+        if error is not None:
+            _state["error"] = error
+
+
+def _stop_collection(error: str | None = None) -> None:
+    """Signal a session to stop, then wait outside the shared state lock."""
+    with _lock:
+        if not _state["recording"]:
+            return
+        if _state["stopping"]:
+            raise RuntimeError("Recording finalisation is already in progress")
+        _state["stopping"] = True
+        stop_event, thread, collection_dir = _state["stop_event"], _state["capture_thread"], _state["collection_dir"]
+    if stop_event is not None:
+        stop_event.set()
+    _finalise_stop(thread, collection_dir, error)
 
 
 def _disk_guard_loop(collection_dir: Path, stop_event: threading.Event) -> None:
     while not stop_event.wait(30):
         if shutil.disk_usage(collection_dir).free < _LOW_DISK_RESERVE_BYTES:
             logger.warning("Low disk space, auto-stopping data collection")
-            with _lock:
-                if _state["recording"]:
-                    _stop_locked(error="Recording auto-stopped: free disk space dropped below 5 GB.")
+            _stop_collection(error="Recording auto-stopped: free disk space dropped below 5 GB.")
             return
 
 
@@ -315,7 +355,7 @@ def start_collection(mode: CaptureMode = Query(DEFAULT_CAPTURE_MODE)):
         _state.update({"recording": True, "started_at": started_at, "collection_dir": collection_dir,
                        "capture_thread": capture_thread, "stop_event": stop_event, "shot_count": 0,
                        "total_bytes": 0, "current_speed_kmh": None, "capturing": False, "error": None,
-                       "mode": mode.value, "focus_configuration": None})
+                       "mode": mode.value, "focus_configuration": None, "stopping": False})
         capture_thread.start()
         threading.Thread(target=_disk_guard_loop, args=(collection_dir, stop_event), daemon=True, name="collection-disk-guard").start()
         gpx_recorder.start(collection_dir)
@@ -327,7 +367,12 @@ def stop_collection():
     with _lock:
         if not _state["recording"]:
             raise HTTPException(status_code=409, detail="Data collection is not recording")
-        _stop_locked()
+    try:
+        _stop_collection()
+    except RuntimeError as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except TimeoutError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
     return _build_status()
 
 
